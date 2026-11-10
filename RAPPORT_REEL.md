@@ -58,6 +58,16 @@ CIC-IDS2017 sont reportées sur ces flux par jointure sur des clés réelles.
 3. **Extrait de démo réel** (`tools/slice_pcap.py`, bibliothèque standard uniquement) :
    `data/pcaps/cic_friday_extract.pcap`, 33 Mo, 56 517 paquets, 6 985 flux NFStream.
 
+   | Empreinte de l'extrait | Valeur |
+   |---|---|
+   | SHA-256 | `5120fb2f88e3c237d4c6c2532676cae0a567c56c23438e0451294d86d0edcba6` |
+   | Taille | 33 278 413 octets |
+   | Paquets | 56 517 (libpcap, linktype 1 Ethernet) |
+   | Premier / dernier paquet (UTC) | 2017-07-07 13:36:00.145 / 19:00:19.979 |
+
+   Le découpage est déterministe : un nouveau découpage depuis le PCAP complet redonne le même
+   SHA-256 (vérifié, 55 s).
+
    | Fenêtre (heure locale) | UTC | Attaque |
    |---|---|---|
    | 10:36:00–10:38:00 | 13:36:00–13:38:00 | Bot (ARES) |
@@ -73,16 +83,28 @@ CIC-IDS2017 sont reportées sur ces flux par jointure sur des clés réelles.
 | Train / test | 92 183 / 30 728 |
 | Composition train | BENIGN 54 685, PortScan 37 192, Bot 306 |
 | Composition test | DDoS 14 903, BENIGN 13 820, PortScan 2 005 |
-| Matrice (tn / fp / fn / tp) | 13 730 / 73 / 10 418 / 6 507 |
+| Matrice (tn / fp / fn / tp) | 13 742 / 78 / 10 177 / 6 731 |
 | Précision | 0,989 |
-| Rappel | 0,384 |
-| FPR | 0,0053 |
+| Rappel | 0,398 |
+| FPR | 0,0056 |
 | ROC-AUC / PR-AUC | 0,990 / 0,988 |
-| RF sans `dst_port` ni protocole : rappel / AUC | 0,363 / 0,990 |
+| RF sans `dst_port` ni protocole : rappel / AUC | 0,346 / 0,989 |
+
+Source des chiffres : `results/nfstream_temporal.json` (log : `results/nfstream_temporal.log`,
+cohérence vérifiée par `python3 tests/check_results.py`).
+
+*Correction (audit) :* la première version publiait une composition (BENIGN 13 820) et une
+matrice (13 803 négatifs) incohérentes. Cause : un bug de parsing des horodatages dans
+`train.py` transformait 106 horodatages sans fraction de seconde en `NaT`, et le split temporel
+les plaçait dans le test. Bug corrigé (commit séparé, test `tests/test_train_timestamps.py`).
+Le tableau ci-dessus vient du split corrigé. Avant correction : matrice
+13 730 / 73 / 10 418 / 6 507, rappel 0,384, FPR 0,0053, précision 0,989, ROC-AUC 0,990,
+RF sans port 0,363 / 0,990. Le modèle déployé (`--final-fit all`) est identique avant et après :
+les résultats de la section 5 ne changent pas. Détail : `RAPPORT_AUDIT.md`.
 
 Avec des horodatages NFStream à la milliseconde, le DDoS (à partir de 18:56 UTC) tombe
 **entièrement** dans le test. Ce split temporel est donc, de fait, un test **zero-day DDoS** :
-rappel 0,38. C'est cohérent avec l'expérience e4 de `RAPPORT_POC.md` (0,44). L'ancien 0,998
+rappel 0,40. C'est cohérent avec l'expérience e4 de `RAPPORT_POC.md` (0,44). L'ancien 0,998
 mesurait un DDoS déjà vu à l'entraînement : les deux chiffres ne sont pas comparables.
 
 **Modèle déployé.** Après cette évaluation, le modèle est réentraîné sur les 122 911 lignes
@@ -155,3 +177,32 @@ bash tools/build_real_dataset.sh     # ~2-3 min : flux NFStream, étiquetage, ex
 bash tests/smoke.sh                  # réentraîne (temporel + final-fit all), pipeline, dashboard
 bash tools/eval_real_demo.sh         # tableau de la section 5
 ```
+
+## 9. Sauvegarde pour la soutenance
+
+L'extrait n'est pas dans git (données CIC-IDS2017) et le PCAP complet pèse 8,8 Go. Sans copie
+locale, la démo réelle n'est pas reproductible.
+
+1. **Copier** `data/pcaps/cic_friday_extract.pcap` (33 Mo) sur un support à part (clé USB,
+   stockage personnel), puis le remettre dans `data/pcaps/` sur la machine de démo.
+2. **Vérifier** l'intégrité :
+
+   ```bash
+   sha256sum data/pcaps/cic_friday_extract.pcap
+   # attendu : 5120fb2f88e3c237d4c6c2532676cae0a567c56c23438e0451294d86d0edcba6
+   ```
+3. **Prévoir aussi** `data/cic/train_nfstream.csv` (25 Mo, le jeu d'entraînement) : sans lui,
+   `entrypoint.sh` se rabat sur l'ancien CSV CICFlowMeter (décalage de domaine) et le modèle n'est
+   plus celui de ce rapport. Autre option : copier `data/models/model.joblib`, mais `tests/smoke.sh`
+   le supprime et le réentraîne, donc il faut lancer `docker compose up -d --renew-anon-volumes`
+   directement.
+4. **Secours**, si seul le PCAP complet est disponible (avec les 3 CSV du vendredi dans
+   `data/cic/raw/`) :
+
+   ```bash
+   bash tools/build_real_dataset.sh   # recrée l'extrait (même SHA-256) et train_nfstream.csv
+   ```
+5. **Sans extrait**, la démo fonctionne quand même, en mode dégradé : seule la PCAP synthétique
+   est analysée (11 flux, 8 alertes Suricata, 3 suspects IA). Le sélecteur de capture disparaît et
+   le dashboard affiche l'avertissement « synthétique » sans erreur.
+

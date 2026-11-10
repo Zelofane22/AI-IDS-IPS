@@ -1,0 +1,25 @@
+{
+  "source": "copied from data/cic/train_nfstream.stats.json written by tools/label_nfstream_flows.py (run of tools/build_real_dataset.sh, mixed policy 'attack'); not recomputed",
+  "nfstream_flows": 501096,
+  "excluded_demo_windows": 8425,
+  "unmatched_dropped": 1027,
+  "mixed_benign_attack": 24691,
+  "mixed_policy": "attack",
+  "conflict_dropped": 0,
+  "labelled": 491644,
+  "families_before_sampling": {
+    "BENIGN": 274051,
+    "PortScan": 156860,
+    "DDoS": 59569,
+    "Bot": 1164
+  },
+  "tolerance_s": 60.0,
+  "sampling_k": 4,
+  "rows_written": 122911,
+  "families_after_sampling": {
+    "BENIGN": 68505,
+    "PortScan": 39197,
+    "DDoS": 14903,
+    "Bot": 306
+  }
+}
