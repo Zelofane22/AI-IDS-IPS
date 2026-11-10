@@ -15,3 +15,5 @@ data/models/*.json
 data/models/*/
 
 .env
+*.patch
+*PROMPT*
