@@ -1,0 +1,7 @@
+ Container ai-ids-ips-ai-engine-run-cd84c3fd42ad Creating 
+ Container ai-ids-ips-ai-engine-run-cd84c3fd42ad Created 
+[ai-engine] trained on cic_ids2017:train.csv (140649 rows)
+[ai-engine] split=random train=105486 test=35163
+[ai-engine] holdout accuracy: 0.998
+[ai-engine] recall=0.997 fpr=0.0016 f1=0.997 auc=1.000
+[ai-engine] model saved to /data/models/e5_random_seed1/model.joblib

@@ -1,0 +1,113 @@
+{
+  "data_source": "cic_ids2017:train.csv",
+  "demo": false,
+  "rows": 140649,
+  "accuracy": 0.9978670761880386,
+  "classification_report": {
+    "0": {
+      "precision": 0.9979736575481256,
+      "recall": 0.9984071821604402,
+      "f1-score": 0.9981903727832067,
+      "support": 20718.0
+    },
+    "1": {
+      "precision": 0.9977140482128013,
+      "recall": 0.9970924195223261,
+      "f1-score": 0.9974031370104913,
+      "support": 14445.0
+    },
+    "accuracy": 0.9978670761880386,
+    "macro avg": {
+      "precision": 0.9978438528804634,
+      "recall": 0.9977498008413832,
+      "f1-score": 0.9977967548968489,
+      "support": 35163.0
+    },
+    "weighted avg": {
+      "precision": 0.9978670097408067,
+      "recall": 0.9978670761880386,
+      "f1-score": 0.9978669754412031,
+      "support": 35163.0
+    }
+  },
+  "evaluation": {
+    "split": "random",
+    "train_rows": 105486,
+    "test_rows": 35163,
+    "random_forest": {
+      "threshold": 0.5,
+      "confusion_matrix": {
+        "tn": 20685,
+        "fp": 33,
+        "fn": 42,
+        "tp": 14403
+      },
+      "precision": 0.9977140482128013,
+      "recall": 0.9970924195223261,
+      "f1": 0.9974031370104913,
+      "fpr": 0.001592817839559803,
+      "roc_auc": 0.9999575034723487,
+      "pr_auc": 0.9999397178576964
+    },
+    "baselines": {
+      "logistic_regression": {
+        "threshold": 0.5,
+        "confusion_matrix": {
+          "tn": 18385,
+          "fp": 2333,
+          "fn": 238,
+          "tp": 14207
+        },
+        "precision": 0.8589480048367594,
+        "recall": 0.9835237106265143,
+        "f1": 0.917024366629014,
+        "fpr": 0.11260739453615214,
+        "roc_auc": 0.9588720657038153,
+        "pr_auc": 0.8902410423493561
+      },
+      "decision_tree_depth3": {
+        "threshold": 0.5,
+        "confusion_matrix": {
+          "tn": 16302,
+          "fp": 4416,
+          "fn": 708,
+          "tp": 13737
+        },
+        "precision": 0.7567344240621385,
+        "recall": 0.9509865005192109,
+        "f1": 0.8428124424811338,
+        "fpr": 0.2131479872574573,
+        "roc_auc": 0.883962045033956,
+        "pr_auc": 0.7516885876032362
+      },
+      "rf_without_dst_port_and_protocol": {
+        "threshold": 0.5,
+        "confusion_matrix": {
+          "tn": 20390,
+          "fp": 328,
+          "fn": 155,
+          "tp": 14290
+        },
+        "precision": 0.9775619099740046,
+        "recall": 0.9892696434752509,
+        "f1": 0.9833809310807555,
+        "fpr": 0.015831643981079255,
+        "roc_auc": 0.9977357667624291,
+        "pr_auc": 0.996338300326887
+      }
+    },
+    "feature_importance": {
+      "dst_port": 0.1698674366247957,
+      "bytes": 0.14783839034877483,
+      "mean_pkt_size": 0.12470503142758316,
+      "min_pkt_size": 0.12414659493501048,
+      "stddev_pkt_size": 0.09540266201636352,
+      "packets": 0.0811940504273271,
+      "max_pkt_size": 0.07385884031418763,
+      "protocol_num": 0.07103184081864324,
+      "bytes_per_s": 0.060646739269401624,
+      "duration_ms": 0.029760877569303974,
+      "packets_per_s": 0.02154753624860862
+    }
+  }
+}
