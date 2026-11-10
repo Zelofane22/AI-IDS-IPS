@@ -58,6 +58,16 @@ CIC-IDS2017 sont reportées sur ces flux par jointure sur des clés réelles.
 3. **Extrait de démo réel** (`tools/slice_pcap.py`, bibliothèque standard uniquement) :
    `data/pcaps/cic_friday_extract.pcap`, 33 Mo, 56 517 paquets, 6 985 flux NFStream.
 
+   | Empreinte de l'extrait | Valeur |
+   |---|---|
+   | SHA-256 | `5120fb2f88e3c237d4c6c2532676cae0a567c56c23438e0451294d86d0edcba6` |
+   | Taille | 33 278 413 octets |
+   | Paquets | 56 517 (libpcap, linktype 1 Ethernet) |
+   | Premier / dernier paquet (UTC) | 2017-07-07 13:36:00.145 / 19:00:19.979 |
+
+   Le découpage est déterministe : un nouveau découpage depuis le PCAP complet redonne le même
+   SHA-256 (vérifié, 55 s).
+
    | Fenêtre (heure locale) | UTC | Attaque |
    |---|---|---|
    | 10:36:00–10:38:00 | 13:36:00–13:38:00 | Bot (ARES) |
@@ -167,3 +177,32 @@ bash tools/build_real_dataset.sh     # ~2-3 min : flux NFStream, étiquetage, ex
 bash tests/smoke.sh                  # réentraîne (temporel + final-fit all), pipeline, dashboard
 bash tools/eval_real_demo.sh         # tableau de la section 5
 ```
+
+## 9. Sauvegarde pour la soutenance
+
+L'extrait n'est pas dans git (données CIC-IDS2017) et le PCAP complet pèse 8,8 Go. Sans copie
+locale, la démo réelle n'est pas reproductible.
+
+1. **Copier** `data/pcaps/cic_friday_extract.pcap` (33 Mo) sur un support à part (clé USB,
+   stockage personnel), puis le remettre dans `data/pcaps/` sur la machine de démo.
+2. **Vérifier** l'intégrité :
+
+   ```bash
+   sha256sum data/pcaps/cic_friday_extract.pcap
+   # attendu : 5120fb2f88e3c237d4c6c2532676cae0a567c56c23438e0451294d86d0edcba6
+   ```
+3. **Prévoir aussi** `data/cic/train_nfstream.csv` (25 Mo, le jeu d'entraînement) : sans lui,
+   `entrypoint.sh` se rabat sur l'ancien CSV CICFlowMeter (décalage de domaine) et le modèle n'est
+   plus celui de ce rapport. Autre option : copier `data/models/model.joblib`, mais `tests/smoke.sh`
+   le supprime et le réentraîne, donc il faut lancer `docker compose up -d --renew-anon-volumes`
+   directement.
+4. **Secours**, si seul le PCAP complet est disponible (avec les 3 CSV du vendredi dans
+   `data/cic/raw/`) :
+
+   ```bash
+   bash tools/build_real_dataset.sh   # recrée l'extrait (même SHA-256) et train_nfstream.csv
+   ```
+5. **Sans extrait**, la démo fonctionne quand même, en mode dégradé : seule la PCAP synthétique
+   est analysée (11 flux, 8 alertes Suricata, 3 suspects IA). Le sélecteur de capture disparaît et
+   le dashboard affiche l'avertissement « synthétique » sans erreur.
+
