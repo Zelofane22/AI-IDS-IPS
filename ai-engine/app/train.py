@@ -110,7 +110,11 @@ def load_training_frame(path: Path) -> tuple[pd.DataFrame, str]:
         frame = df.copy()
         frame[LABEL_COLUMN] = resolve_labels(df[label_col])
         if "timestamp" in frame.columns:
-            frame["timestamp"] = pd.to_datetime(frame["timestamp"], errors="coerce", utc=True)
+            # Explicit ISO 8601: pandas otherwise infers the format from the first row
+            # (with milliseconds) and turns whole-second timestamps into NaT, which the
+            # temporal split then sorts last, i.e. into the test set.
+            frame["timestamp"] = pd.to_datetime(
+                frame["timestamp"], format="ISO8601", errors="coerce", utc=True)
         elif "first_seen_ms" in frame.columns:
             frame["timestamp"] = pd.to_datetime(frame["first_seen_ms"], unit="ms", errors="coerce", utc=True)
         if "attack_family" in frame.columns:
@@ -172,6 +176,10 @@ def split_frame(frame: pd.DataFrame, mode: str, seed: int, test_size: float = 0.
     labels = resolve_labels(frame[LABEL_COLUMN])
     if mode == "temporal":
         if "timestamp" in frame.columns and frame["timestamp"].notna().any():
+            missing = int(frame["timestamp"].isna().sum())
+            if missing:
+                print(f"[ai-engine] WARNING: {missing} row(s) without a parsable timestamp "
+                      "are sorted last (test set) by the temporal split")
             order = frame["timestamp"].sort_values(kind="stable").index
         else:
             print("[ai-engine] WARNING: no Timestamp column, using file order for temporal split")
