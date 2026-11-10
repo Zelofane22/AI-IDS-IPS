@@ -1,0 +1,7 @@
+$ docker compose run --rm --no-deps --entrypoint python ai-engine /app/app/train.py --data /data/cic/train_nfstream.csv --out /data/models/audit/fixed/model.joblib --final-fit all
+# code commit 4bf8df9 (train.py with the ISO 8601 timestamp fix)
+[ai-engine] trained on nfstream_csv:train_nfstream.csv (122911 rows)
+[ai-engine] split=temporal train=92183 test=30728
+[ai-engine] holdout accuracy: 0.666
+[ai-engine] recall=0.398 fpr=0.0056 f1=0.568 auc=0.990
+[ai-engine] model saved to /data/models/audit/fixed/model.joblib

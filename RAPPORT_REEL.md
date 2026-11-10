@@ -80,6 +80,9 @@ CIC-IDS2017 sont reportées sur ces flux par jointure sur des clés réelles.
 | ROC-AUC / PR-AUC | 0,990 / 0,988 |
 | RF sans `dst_port` ni protocole : rappel / AUC | 0,346 / 0,989 |
 
+Source des chiffres : `results/nfstream_temporal.json` (log : `results/nfstream_temporal.log`,
+cohérence vérifiée par `python3 tests/check_results.py`).
+
 *Correction (audit) :* la première version publiait une composition (BENIGN 13 820) et une
 matrice (13 803 négatifs) incohérentes. Cause : un bug de parsing des horodatages dans
 `train.py` transformait 106 horodatages sans fraction de seconde en `NaT`, et le split temporel
