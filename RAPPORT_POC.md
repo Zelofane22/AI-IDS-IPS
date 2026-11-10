@@ -241,7 +241,7 @@ mêmes matrices et mêmes métriques). Les fichiers `.joblib` ne sont pas identi
 Prédictions sur le PCAP synthétique de démo (seuil 0,5) :
 
 | flow_id | 5-tuple | attack_probability | label |
-|---|---|---|---:|---|
+|---|---|---:|---|
 | synthetic_demo:0 | 192.168.1.10:49152 → 192.168.1.50:80/TCP | 0,034770 | benign |
 | synthetic_demo:1 | 192.168.1.10:49157 → 93.184.216.34:443/TCP | 0,017003 | benign |
 | synthetic_demo:10 | 192.168.1.10:49156 → 192.168.1.50:80/TCP | 0,027115 | benign |
