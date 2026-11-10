@@ -299,8 +299,7 @@ mauvaise détection : cela montre surtout que le modèle n'est pas calibré pour
 - Le téléchargement est passé par un miroir non officiel ; aucune empreinte officielle UNB n'a pu
   être comparée.
 - Aucun OOM, aucun exit 137, aucune override mémoire.
-- `rapport.md` (ancien rapport d'audit) était déjà supprimé dans le worktree au démarrage ; cette
-  suppression n'a pas été committée dans les commits ci-dessus.
+- `rapport.md` (ancien rapport d'audit) a été supprimé volontairement par le propriétaire du projet ; la suppression est committée dans `fcf2f18`.
 - `PROMPT_OPENCODE.md` et `poc-fixes.patch` restent non suivis (non committés).
 
 ## 11. Signaux d'alerte
