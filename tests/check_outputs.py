@@ -110,6 +110,8 @@ def main() -> int:
         )
         if payload.get("demo"):
             notes.append("predictions flagged as synthetic DEMO data")
+        if payload.get("demo_traffic"):
+            notes.append("flows are synthetic DEMO traffic; model may be real-data trained")
 
     print("Artifact check")
     for note in notes:

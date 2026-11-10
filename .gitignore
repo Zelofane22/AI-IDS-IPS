@@ -10,6 +10,10 @@ logs/*.log
 logs/eve.json
 
 data/cic/*.csv
+data/cic/raw/
 data/models/*.json
+data/models/*/
 
 .env
+*.patch
+*PROMPT*

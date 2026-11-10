@@ -1,0 +1,7 @@
+ Container ai-ids-ips-ai-engine-run-453e6b137da3 Creating 
+ Container ai-ids-ips-ai-engine-run-453e6b137da3 Created 
+[ai-engine] trained on cic_ids2017:train.csv (140649 rows)
+[ai-engine] split=temporal train=105486 test=35163
+[ai-engine] holdout accuracy: 0.998
+[ai-engine] recall=0.998 fpr=0.0006 f1=0.999 auc=1.000
+[ai-engine] model saved to /data/models/e3_zeroday_bot/model.joblib

@@ -148,10 +148,10 @@ def render() -> None:
         "Aucun blocage réseau réel n'est effectué."
     )
 
-    if prediction_payload.get("demo"):
+    if prediction_payload.get("demo") or prediction_payload.get("demo_traffic"):
         st.warning(
-            "Résultats IA issus de données synthétiques de DÉMONSTRATION "
-            "(source : synthetic_demo). Ce ne sont pas des résultats expérimentaux réels."
+            "Trafic PCAP synthétique de démonstration ; modèle entraîné sur CIC-IDS2017 — "
+            "ces prédictions ne sont pas un résultat expérimental."
         )
 
     if not alerts.empty:

@@ -7,9 +7,14 @@ This file records constraints that are easy to get wrong. Read it before changin
 - 4 Compose services are implemented: `suricata`, `flow-extractor`, `ai-engine`, `dashboard`.
   A stdlib-only synthetic PCAP generator lives in `traffic-generator/`.
 - End-to-end validated with `bash tests/smoke.sh` (Docker 29.9.3 + Compose v5.7.0):
-  97-packet demo PCAP → 11 flows, 8 Suricata alerts, model trained (0.992 holdout on
-  synthetic demo data), 9 suspicious / 2 benign, dashboard healthy on :8501.
+  97-packet demo PCAP → 11 flows, 8 Suricata alerts, model retrained on a Friday
+  CIC-IDS2017 sample with a temporal split (accuracy 0.998), 0 suspicious / 11 benign
+  on the synthetic PCAP, dashboard healthy on :8501.
   Re-run it after changing services; do not assume it still passes.
+- The current `data/models/model.joblib` is trained on a 140 649-row CIC-IDS2017
+  Friday sample (`data/cic/train.csv`, built by `tools/build_cic_sample.py`) with a
+  temporal split, not on synthetic demo data. The demo PCAP remains synthetic;
+  `predictions.json` carries `demo_traffic: true` and the dashboard warns about it.
 - Artifact flow: `data/pcaps/*.pcap` → `logs/eve.json` (Suricata) + `data/flows/flows.csv`
   (NFStream) → `data/models/model.joblib` + `data/predictions/predictions.json` → dashboard.
 
@@ -63,7 +68,8 @@ docker compose run --rm --entrypoint python ai-engine \
 ## Non-negotiable rules
 - **No real network blocking**; blocking is a dashboard simulation only.
 - Containers: no `privileged`, `cap_drop: ALL`, `no-new-privileges`, no unneeded ports, resource limits.
-- **Never auto-download** large datasets. CIC-IDS2017 only if the user supplies a compatible file.
+- **Never auto-download** large datasets, except on an explicit request from the project owner;
+  never commit the dataset. CIC-IDS2017 only if the user supplies a compatible file.
 - Synthetic data must stay clearly labeled as demo (filename, bundle `data_source`, dashboard warning);
   never present it as real experimental results.
 - Train and predict must use the **exact same** feature set and preprocessing.

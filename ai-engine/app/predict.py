@@ -93,6 +93,7 @@ def main() -> int:
                 "model": str(args.model),
                 "data_source": bundle.get("data_source"),
                 "demo": bundle.get("demo", False),
+                "demo_traffic": False,
                 "threshold": threshold,
                 "flow_count": 0,
                 "suspicious_count": 0,
@@ -114,11 +115,15 @@ def main() -> int:
         records = _records(flows, probabilities, threshold)
 
     suspicious = sum(1 for record in records if record["is_attack"])
+    demo_traffic = any(
+        str(record.get("flow_id", "")).startswith("synthetic_demo") for record in records
+    )
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model": str(args.model),
         "data_source": bundle.get("data_source"),
         "demo": bool(bundle.get("demo", False)),
+        "demo_traffic": demo_traffic,
         "threshold": threshold,
         "flow_count": len(records),
         "suspicious_count": suspicious,
