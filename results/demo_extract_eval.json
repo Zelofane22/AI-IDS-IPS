@@ -1,0 +1,35 @@
+{
+  "threshold": 0.5,
+  "data_source": "nfstream_csv:train_nfstream.csv",
+  "labelled_flows": 6695,
+  "per_family": {
+    "BENIGN": {
+      "flows": 3046,
+      "ai_rate": 0.07255416940249508,
+      "suricata_rate": 0.005909389363099146,
+      "either_rate": 0.07715036112934996,
+      "both_rate": 0.0013131976362442547
+    },
+    "Bot": {
+      "flows": 64,
+      "ai_rate": 1.0,
+      "suricata_rate": 0.0,
+      "either_rate": 1.0,
+      "both_rate": 0.0
+    },
+    "DDoS": {
+      "flows": 1581,
+      "ai_rate": 0.9626818469323213,
+      "suricata_rate": 0.0480708412397217,
+      "either_rate": 0.9645793801391525,
+      "both_rate": 0.046173308032890575
+    },
+    "PortScan": {
+      "flows": 2004,
+      "ai_rate": 1.0,
+      "suricata_rate": 0.036926147704590816,
+      "either_rate": 1.0,
+      "both_rate": 0.036926147704590816
+    }
+  }
+}

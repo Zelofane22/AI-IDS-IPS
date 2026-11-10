@@ -109,7 +109,14 @@ def load_training_frame(path: Path) -> tuple[pd.DataFrame, str]:
             raise ValueError("CSV has canonical features but no label column")
         frame = df.copy()
         frame[LABEL_COLUMN] = resolve_labels(df[label_col])
-        return frame, f"user_csv:{path.name}"
+        if "timestamp" in frame.columns:
+            frame["timestamp"] = pd.to_datetime(frame["timestamp"], errors="coerce", utc=True)
+        elif "first_seen_ms" in frame.columns:
+            frame["timestamp"] = pd.to_datetime(frame["first_seen_ms"], unit="ms", errors="coerce", utc=True)
+        if "attack_family" in frame.columns:
+            frame["attack_family"] = frame["attack_family"].astype(str).str.strip()
+        # Canonical CSVs come from flow-extractor (NFStream): same extractor as predict.
+        return frame, f"nfstream_csv:{path.name}"
     return _load_cic(df), f"cic_ids2017:{path.name}"
 
 
@@ -280,6 +287,10 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--split", choices=["auto", "random", "temporal"], default="auto",
                         help="auto = temporal for --data, random for --demo")
+    parser.add_argument("--final-fit", choices=["train", "all"], default="train",
+                        help="train = save the model fitted on the train split (default); "
+                             "all = after evaluation, refit the saved model on every row. "
+                             "Reported metrics always come from the split evaluation.")
     parser.add_argument("--holdout-family", default=None,
                         help="CIC attack label to hide from training (zero-day experiment)")
     args = parser.parse_args()
@@ -327,6 +338,14 @@ def main() -> int:
     if args.holdout_family:
         evaluation["zero_day"] = zero_day_experiment(
             frame, train_df, test_df, args.holdout_family, args.threshold, args.seed)
+
+    if args.final_fit == "all":
+        # Metrics above stay those of the split; the deployed model sees all rows.
+        x_all, medians = build_feature_matrix(frame)
+        classifier = _rf(args.seed).fit(x_all, resolve_labels(frame[LABEL_COLUMN]))
+        evaluation["final_fit"] = {"mode": "all", "rows": int(len(frame))}
+    else:
+        evaluation["final_fit"] = {"mode": "train", "rows": int(len(train_df))}
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     bundle = {

@@ -67,6 +67,8 @@ def load_alerts() -> pd.DataFrame:
                     "severity": alert.get("severity"),
                     "category": alert.get("category"),
                     "action": alert.get("action"),
+                    # Set by Suricata (eve "pcap-file: true"); same stem as flow-extractor flow_id prefix.
+                    "source_pcap": Path(str(event.get("pcap_filename", ""))).stem,
                 }
             )
     return pd.DataFrame(rows)
@@ -140,7 +142,7 @@ def render() -> None:
     prediction_payload = load_predictions()
     alerts = load_alerts()
     predictions = pd.DataFrame(prediction_payload.get("predictions", []))
-    hybrid = build_hybrid(alerts, predictions)
+    sources: dict = prediction_payload.get("sources", {})
 
     st.title("AI-IDS-IPS — Tableau de bord hybride")
     st.caption(
@@ -148,10 +150,38 @@ def render() -> None:
         "Aucun blocage réseau réel n'est effectué."
     )
 
-    if prediction_payload.get("demo") or prediction_payload.get("demo_traffic"):
+    # Capture selector: filters on the PCAP name carried by both Suricata events
+    # (pcap_filename) and flow ids (flow-extractor prefix) — a real shared field.
+    capture_names = sorted(sources)
+    selected = "Toutes"
+    if len(capture_names) > 1:
+        selected = st.selectbox("Capture analysée", ["Toutes"] + capture_names)
+    if selected != "Toutes":
+        if "source_pcap" in predictions.columns:
+            predictions = predictions[predictions["source_pcap"] == selected]
+        if "source_pcap" in alerts.columns:
+            alerts = alerts[alerts["source_pcap"] == selected]
+        if "flow_id" in flows.columns:
+            flows = flows[flows["flow_id"].astype(str).str.startswith(selected + ":")]
+    shown = capture_names if selected == "Toutes" else [selected]
+    hybrid = build_hybrid(alerts, predictions)
+
+    if prediction_payload.get("demo"):
+        st.error(
+            "Modèle entraîné sur des données SYNTHÉTIQUES de démonstration — "
+            "aucun résultat expérimental."
+        )
+    synthetic = [name for name in shown if sources.get(name, {}).get("synthetic")]
+    real = [name for name in shown if not sources.get(name, {}).get("synthetic")]
+    if synthetic:
         st.warning(
-            "Trafic PCAP synthétique de démonstration ; modèle entraîné sur CIC-IDS2017 — "
+            f"Trafic synthétique de démonstration ({', '.join(synthetic)}) — "
             "ces prédictions ne sont pas un résultat expérimental."
+        )
+    if real:
+        st.info(
+            f"Extrait réel CIC-IDS2017 ({', '.join(real)}) : fenêtres exclues de "
+            "l'entraînement du modèle. Rejeu hors ligne, aucun trafic live."
         )
 
     if not alerts.empty:
