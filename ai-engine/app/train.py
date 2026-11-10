@@ -94,12 +94,15 @@ def _load_cic(df: pd.DataFrame) -> pd.DataFrame:
     out[LABEL_COLUMN] = resolve_labels(df[CIC_LABEL_COLUMN])
     out["attack_family"] = df[CIC_LABEL_COLUMN].astype(str).str.strip()
     if "Timestamp" in df.columns:
-        out["timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
+        ts = pd.to_datetime(df["Timestamp"], format="mixed", errors="coerce")
+        # CIC-IDS2017 timestamps use a 12h clock without AM/PM and the capture ran
+        # 09:00-17:00: hours 1-7 are afternoon (13-19h). Fix so sorting is chronological.
+        out["timestamp"] = ts.where(~(ts.dt.hour < 8), ts + pd.Timedelta(hours=12))
     return out
 
 
 def load_training_frame(path: Path) -> tuple[pd.DataFrame, str]:
-    df = _clean_columns(pd.read_csv(path, low_memory=False))
+    df = _clean_columns(pd.read_csv(path, low_memory=False, encoding_errors="replace"))
     if all(feature in df.columns for feature in FEATURES):
         label_col = LABEL_COLUMN if LABEL_COLUMN in df.columns else CIC_LABEL_COLUMN
         if label_col not in df.columns:
@@ -221,39 +224,50 @@ def run_baselines(x_tr, y_tr, x_te, y_te, threshold, seed) -> dict:
     return results
 
 
-def zero_day_experiment(train_df, test_df, family, threshold, seed) -> dict | None:
+def zero_day_experiment(frame, train_df, test_df, family, threshold, seed) -> dict | None:
     """Hide one attack family from training; measure recall on it (supervised RF
-    vs unsupervised IsolationForest trained on benign traffic only)."""
-    if "attack_family" not in train_df.columns:
+    vs unsupervised IsolationForest trained on benign traffic only).
+
+    The hidden family is never seen in training, so ALL its flows (train+test
+    portions) are used for the recall; FPR is measured on the benign test flows."""
+    if "attack_family" not in frame.columns:
         print("[ai-engine] --holdout-family needs a CIC-style CSV (attack_family column)")
         return None
-    fam_tr = train_df["attack_family"].str.upper()
-    fam_te = test_df["attack_family"].str.upper()
     target = family.strip().upper()
-    if not (fam_te == target).any():
-        print(f"[ai-engine] family {family!r} absent from the test split")
+    fam_all = frame["attack_family"].str.upper()
+    if not (fam_all == target).any():
+        print(f"[ai-engine] family {family!r} not found in the dataset")
         return None
-    tr = train_df[fam_tr != target]
+    tr = train_df[train_df["attack_family"].str.upper() != target]
+    hidden = frame[fam_all == target]
+    benign_te = test_df[resolve_labels(test_df[LABEL_COLUMN]).values == 0]
+    if tr[LABEL_COLUMN].nunique() < 2 or benign_te.empty:
+        print("[ai-engine] zero-day experiment skipped: not enough classes after hiding the family")
+        return None
+
     x_tr, medians = build_feature_matrix(tr)
-    x_te, _ = build_feature_matrix(test_df, medians)
     y_tr = resolve_labels(tr[LABEL_COLUMN])
-    y_te = resolve_labels(test_df[LABEL_COLUMN])
+    x_hid, _ = build_feature_matrix(hidden, medians)
+    x_ben, _ = build_feature_matrix(benign_te, medians)
+
     rf = _rf(seed).fit(x_tr, y_tr)
-    p_rf = rf.predict_proba(x_te)[:, 1]
     iso = IsolationForest(n_estimators=200, contamination=0.05, random_state=seed, n_jobs=1)
     iso.fit(x_tr[y_tr.values == 0])
-    p_iso = (iso.predict(x_te) == -1).astype(float)
-    is_target = (fam_te == target).values
-    is_benign = (y_te.values == 0)
-    summary = lambda p: {
-        "recall_on_hidden_family": float((p[is_target] >= threshold).mean()),
-        "fpr_on_benign": float((p[is_benign] >= threshold).mean()),
-    }
+
+    rf_flag = lambda x: rf.predict_proba(x)[:, list(rf.classes_).index(ATTACK_LABEL)] >= threshold
+    iso_flag = lambda x: iso.predict(x) == -1
     return {
         "hidden_family": family,
-        "hidden_family_test_flows": int(is_target.sum()),
-        "random_forest_supervised": summary(p_rf),
-        "isolation_forest_benign_only": summary(p_iso),
+        "hidden_family_flows": int(len(hidden)),
+        "benign_test_flows": int(len(benign_te)),
+        "random_forest_supervised": {
+            "recall_on_hidden_family": float(rf_flag(x_hid).mean()),
+            "fpr_on_benign": float(rf_flag(x_ben).mean()),
+        },
+        "isolation_forest_benign_only": {
+            "recall_on_hidden_family": float(iso_flag(x_hid).mean()),
+            "fpr_on_benign": float(iso_flag(x_ben).mean()),
+        },
     }
 
 
@@ -312,7 +326,7 @@ def main() -> int:
     }
     if args.holdout_family:
         evaluation["zero_day"] = zero_day_experiment(
-            train_df, test_df, args.holdout_family, args.threshold, args.seed)
+            frame, train_df, test_df, args.holdout_family, args.threshold, args.seed)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     bundle = {
