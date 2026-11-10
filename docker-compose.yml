@@ -1,0 +1,132 @@
+name: ai-ids-ips
+
+services:
+  suricata:
+    build:
+      context: ./suricata
+    container_name: ai-ids-ips-suricata
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HOME: /tmp
+      PCAP_DIR: /data/pcaps
+      LOG_DIR: /var/log/suricata
+    volumes:
+      - ./data/pcaps:/data/pcaps:ro
+      - ./logs:/var/log/suricata
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    restart: "no"
+    networks:
+      - idsnet
+
+  flow-extractor:
+    build:
+      context: ./flow-extractor
+    container_name: ai-ids-ips-flow-extractor
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HOME: /tmp
+    volumes:
+      - ./data/pcaps:/data/pcaps:ro
+      - ./data/flows:/data/flows
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    restart: "no"
+    networks:
+      - idsnet
+
+  ai-engine:
+    build:
+      context: ./ai-engine
+    container_name: ai-ids-ips-ai-engine
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HOME: /tmp
+      MODEL_PATH: /data/models/model.joblib
+      FLOWS_CSV: /data/flows/flows.csv
+      PREDICTIONS_PATH: /data/predictions/predictions.json
+      CIC_SAMPLE: /data/cic/train.csv
+    volumes:
+      - ./data/flows:/data/flows:ro
+      - ./data/models:/data/models
+      - ./data/predictions:/data/predictions
+      - ./data/cic:/data/cic:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      flow-extractor:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1G
+    restart: "no"
+    networks:
+      - idsnet
+
+  dashboard:
+    build:
+      context: ./dashboard
+    container_name: ai-ids-ips-dashboard
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HOME: /tmp
+      LOG_DIR: /data/logs
+      FLOWS_CSV: /data/flows/flows.csv
+      PREDICTIONS_JSON: /data/predictions/predictions.json
+      REFRESH_SECONDS: "5"
+    volumes:
+      - ./logs:/data/logs:ro
+      - ./data/flows:/data/flows:ro
+      - ./data/predictions:/data/predictions:ro
+    ports:
+      - "8501:8501"
+    tmpfs:
+      - /tmp
+    depends_on:
+      ai-engine:
+        condition: service_completed_successfully
+      suricata:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    restart: unless-stopped
+    networks:
+      - idsnet
+
+networks:
+  idsnet:
+    driver: bridge

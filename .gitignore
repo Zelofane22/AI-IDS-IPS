@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+data/flows/*.csv
+data/predictions/*.json
+data/models/*.joblib
+data/models/train_report.json
+logs/*.log
+logs/eve.json
+
+.env

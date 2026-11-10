@@ -1,0 +1,12 @@
+# Local DEMO rules for the AI-IDS-IPS prototype.
+# These rules are intentionally simple and are NOT a production ruleset.
+
+alert icmp any any -> any any (msg:"DEMO ICMP echo request"; itype:8; sid:1000001; rev:1;)
+
+alert http any any -> any any (msg:"DEMO suspicious HTTP URI /admin"; flow:to_server,established; http.uri; content:"/admin"; nocase; sid:1000002; rev:1;)
+
+alert tcp any any -> any 22 (msg:"DEMO SSH connection attempt"; flow:to_server; sid:1000003; rev:1;)
+
+alert tcp any any -> any 23 (msg:"DEMO Telnet connection attempt"; flow:to_server; sid:1000004; rev:1;)
+
+alert tcp any any -> any 3389 (msg:"DEMO RDP connection attempt"; flow:to_server; sid:1000005; rev:1;)
