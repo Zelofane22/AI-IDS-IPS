@@ -71,24 +71,27 @@ CIC-IDS2017 sont reportées sur ces flux par jointure sur des clés réelles.
 | | Valeur |
 |---|---:|
 | Train / test | 92 183 / 30 728 |
-| Composition train | BENIGN 54 702, PortScan 37 175, Bot 306 |
-| Composition test | DDoS 14 903, BENIGN 13 803, PortScan 2 022 |
-| Matrice (tn / fp / fn / tp) | 13 730 / 73 / 10 418 / 6 507 |
+| Composition train | BENIGN 54 685, PortScan 37 192, Bot 306 |
+| Composition test | DDoS 14 903, BENIGN 13 820, PortScan 2 005 |
+| Matrice (tn / fp / fn / tp) | 13 742 / 78 / 10 177 / 6 731 |
 | Précision | 0,989 |
-| Rappel | 0,384 |
-| FPR | 0,0053 |
+| Rappel | 0,398 |
+| FPR | 0,0056 |
 | ROC-AUC / PR-AUC | 0,990 / 0,988 |
-| RF sans `dst_port` ni protocole : rappel / AUC | 0,363 / 0,990 |
+| RF sans `dst_port` ni protocole : rappel / AUC | 0,346 / 0,989 |
 
-*Correction (audit) :* la composition publiée au départ (test : BENIGN 13 820, PortScan 2 005)
-venait d'un script de contrôle qui triait sur `first_seen_ms`, pas du split de `train.py`.
-Les chiffres ci-dessus sont ceux du split réel ; ils concordent avec la matrice
-(13 730 + 73 = 13 803 négatifs). L'écart de 17 flux révèle un bug de parsing des horodatages
-dans `train.py` : 106 flux du matin passent dans le test (détail dans `RAPPORT_AUDIT.md`).
+*Correction (audit) :* la première version publiait une composition (BENIGN 13 820) et une
+matrice (13 803 négatifs) incohérentes. Cause : un bug de parsing des horodatages dans
+`train.py` transformait 106 horodatages sans fraction de seconde en `NaT`, et le split temporel
+les plaçait dans le test. Bug corrigé (commit séparé, test `tests/test_train_timestamps.py`).
+Le tableau ci-dessus vient du split corrigé. Avant correction : matrice
+13 730 / 73 / 10 418 / 6 507, rappel 0,384, FPR 0,0053, précision 0,989, ROC-AUC 0,990,
+RF sans port 0,363 / 0,990. Le modèle déployé (`--final-fit all`) est identique avant et après :
+les résultats de la section 5 ne changent pas. Détail : `RAPPORT_AUDIT.md`.
 
 Avec des horodatages NFStream à la milliseconde, le DDoS (à partir de 18:56 UTC) tombe
 **entièrement** dans le test. Ce split temporel est donc, de fait, un test **zero-day DDoS** :
-rappel 0,38. C'est cohérent avec l'expérience e4 de `RAPPORT_POC.md` (0,44). L'ancien 0,998
+rappel 0,40. C'est cohérent avec l'expérience e4 de `RAPPORT_POC.md` (0,44). L'ancien 0,998
 mesurait un DDoS déjà vu à l'entraînement : les deux chiffres ne sont pas comparables.
 
 **Modèle déployé.** Après cette évaluation, le modèle est réentraîné sur les 122 911 lignes

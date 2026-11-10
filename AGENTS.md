@@ -11,7 +11,7 @@ This file records constraints that are easy to get wrong. Read it before changin
   726 alerts; dashboard healthy on :8501. Re-run it after changing services.
 - The model is trained on **NFStream flows of the real CIC-IDS2017 Friday PCAP**, labelled from the
   CIC CSVs by 5-tuple + time join (`data/cic/train_nfstream.csv`, 122 911 rows), so train and predict
-  use the same extractor. Temporal-split metrics: recall 0.384, FPR 0.0053, AUC 0.990 (DDoS is
+  use the same extractor. Temporal-split metrics: recall 0.398, FPR 0.0056, AUC 0.990 (DDoS is
   entirely in the test part = de-facto zero-day DDoS). Deployed model is refit on all rows
   (`--final-fit all`). Details and demo-extract results: `RAPPORT_REEL.md`.
 - `data/pcaps/cic_friday_extract.pcap` (Bot/PortScan/DDoS windows) is REAL traffic, excluded from
