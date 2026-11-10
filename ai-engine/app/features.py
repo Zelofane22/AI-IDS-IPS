@@ -21,7 +21,6 @@ IDENTITY_COLUMNS = [
 FEATURES = [
     "duration_ms",
     "protocol_num",
-    "src_port",
     "dst_port",
     "packets",
     "bytes",

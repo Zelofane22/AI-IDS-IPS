@@ -9,4 +9,7 @@ data/models/train_report.json
 logs/*.log
 logs/eve.json
 
+data/cic/*.csv
+data/models/*.json
+
 .env

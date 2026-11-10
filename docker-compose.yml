@@ -99,6 +99,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    read_only: true
     environment:
       HOME: /tmp
       LOG_DIR: /data/logs
@@ -110,7 +111,7 @@ services:
       - ./data/flows:/data/flows:ro
       - ./data/predictions:/data/predictions:ro
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     tmpfs:
       - /tmp
     depends_on:

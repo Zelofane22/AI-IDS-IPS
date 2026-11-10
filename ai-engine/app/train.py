@@ -21,9 +21,19 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    classification_report,
+    confusion_matrix,
+    roc_auc_score,
+)
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 
 from features import (
     ATTACK_LABEL,
@@ -80,8 +90,11 @@ def _load_cic(df: pd.DataFrame) -> pd.DataFrame:
     out["stddev_pkt_size"] = pd.to_numeric(df[CIC_COLUMN_MAP["stddev_pkt_size"]], errors="coerce")
     out["dst_port"] = pd.to_numeric(df[CIC_COLUMN_MAP["dst_port"]], errors="coerce")
     out["protocol_num"] = pd.to_numeric(df[CIC_COLUMN_MAP["protocol_num"]], errors="coerce")
-    out["src_port"] = 0
+    # No src_port: it is an ephemeral port, not part of the feature contract.
     out[LABEL_COLUMN] = resolve_labels(df[CIC_LABEL_COLUMN])
+    out["attack_family"] = df[CIC_LABEL_COLUMN].astype(str).str.strip()
+    if "Timestamp" in df.columns:
+        out["timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
     return out
 
 
@@ -144,6 +157,106 @@ def make_synthetic_frame(n_samples: int = 4000, seed: int = 42) -> pd.DataFrame:
     return frame.sample(frac=1.0, random_state=seed).reset_index(drop=True)
 
 
+def split_frame(frame: pd.DataFrame, mode: str, seed: int, test_size: float = 0.25):
+    """Split BEFORE any imputation. 'temporal' keeps the last part for testing."""
+    labels = resolve_labels(frame[LABEL_COLUMN])
+    if mode == "temporal":
+        if "timestamp" in frame.columns and frame["timestamp"].notna().any():
+            order = frame["timestamp"].sort_values(kind="stable").index
+        else:
+            print("[ai-engine] WARNING: no Timestamp column, using file order for temporal split")
+            order = frame.index
+        cut = int(len(order) * (1 - test_size))
+        return frame.loc[order[:cut]], frame.loc[order[cut:]]
+    return train_test_split(frame, test_size=test_size, random_state=seed, stratify=labels)
+
+
+def _signed_log(x):
+    return np.sign(x) * np.log1p(np.abs(x))
+
+
+def metrics_at(y_true, proba, threshold: float) -> dict:
+    y_true = np.asarray(y_true)
+    pred = (np.asarray(proba) >= threshold).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_true, pred, labels=[0, 1]).ravel()
+    div = lambda a, b: float(a / b) if b else 0.0
+    precision, recall = div(tp, tp + fp), div(tp, tp + fn)
+    out = {
+        "threshold": float(threshold),
+        "confusion_matrix": {"tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)},
+        "precision": precision,
+        "recall": recall,
+        "f1": div(2 * precision * recall, precision + recall),
+        "fpr": div(fp, fp + tn),
+    }
+    if len(set(y_true.tolist())) == 2:
+        out["roc_auc"] = float(roc_auc_score(y_true, proba))
+        out["pr_auc"] = float(average_precision_score(y_true, proba))
+    return out
+
+
+def _rf(seed: int) -> RandomForestClassifier:
+    return RandomForestClassifier(
+        n_estimators=200, max_depth=None, min_samples_leaf=2,
+        class_weight="balanced", random_state=seed, n_jobs=1,
+    )
+
+
+def run_baselines(x_tr, y_tr, x_te, y_te, threshold, seed) -> dict:
+    """Reference models for the memoire: is the Random Forest really needed?"""
+    results = {}
+    logreg = make_pipeline(
+        FunctionTransformer(_signed_log), StandardScaler(),
+        LogisticRegression(max_iter=1000, class_weight="balanced"),
+    ).fit(x_tr, y_tr)
+    results["logistic_regression"] = metrics_at(y_te, logreg.predict_proba(x_te)[:, 1], threshold)
+    tree = DecisionTreeClassifier(max_depth=3, class_weight="balanced", random_state=seed).fit(x_tr, y_tr)
+    results["decision_tree_depth3"] = metrics_at(y_te, tree.predict_proba(x_te)[:, 1], threshold)
+    # Shortcut check: does the RF only learn the destination port?
+    cols = [c for c in x_tr.columns if c not in ("dst_port", "protocol_num")]
+    rf_np = _rf(seed).fit(x_tr[cols], y_tr)
+    results["rf_without_dst_port_and_protocol"] = metrics_at(
+        y_te, rf_np.predict_proba(x_te[cols])[:, 1], threshold
+    )
+    return results
+
+
+def zero_day_experiment(train_df, test_df, family, threshold, seed) -> dict | None:
+    """Hide one attack family from training; measure recall on it (supervised RF
+    vs unsupervised IsolationForest trained on benign traffic only)."""
+    if "attack_family" not in train_df.columns:
+        print("[ai-engine] --holdout-family needs a CIC-style CSV (attack_family column)")
+        return None
+    fam_tr = train_df["attack_family"].str.upper()
+    fam_te = test_df["attack_family"].str.upper()
+    target = family.strip().upper()
+    if not (fam_te == target).any():
+        print(f"[ai-engine] family {family!r} absent from the test split")
+        return None
+    tr = train_df[fam_tr != target]
+    x_tr, medians = build_feature_matrix(tr)
+    x_te, _ = build_feature_matrix(test_df, medians)
+    y_tr = resolve_labels(tr[LABEL_COLUMN])
+    y_te = resolve_labels(test_df[LABEL_COLUMN])
+    rf = _rf(seed).fit(x_tr, y_tr)
+    p_rf = rf.predict_proba(x_te)[:, 1]
+    iso = IsolationForest(n_estimators=200, contamination=0.05, random_state=seed, n_jobs=1)
+    iso.fit(x_tr[y_tr.values == 0])
+    p_iso = (iso.predict(x_te) == -1).astype(float)
+    is_target = (fam_te == target).values
+    is_benign = (y_te.values == 0)
+    summary = lambda p: {
+        "recall_on_hidden_family": float((p[is_target] >= threshold).mean()),
+        "fpr_on_benign": float((p[is_benign] >= threshold).mean()),
+    }
+    return {
+        "hidden_family": family,
+        "hidden_family_test_flows": int(is_target.sum()),
+        "random_forest_supervised": summary(p_rf),
+        "isolation_forest_benign_only": summary(p_iso),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, help="Training CSV (canonical or CIC-IDS2017)")
@@ -151,6 +264,10 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("/data/models/model.joblib"))
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--split", choices=["auto", "random", "temporal"], default="auto",
+                        help="auto = temporal for --data, random for --demo")
+    parser.add_argument("--holdout-family", default=None,
+                        help="CIC attack label to hide from training (zero-day experiment)")
     args = parser.parse_args()
 
     if args.data and not args.demo:
@@ -162,26 +279,40 @@ def main() -> int:
     if LABEL_COLUMN not in frame.columns or frame[LABEL_COLUMN].nunique() < 2:
         raise SystemExit("Training data must contain both benign and attack labels")
 
-    matrix, medians = build_feature_matrix(frame)
-    labels = resolve_labels(frame[LABEL_COLUMN])
+    split_mode = args.split if args.split != "auto" else ("temporal" if source != "synthetic_demo" else "random")
+    train_df, test_df = split_frame(frame, split_mode, args.seed)
+    y_train = resolve_labels(train_df[LABEL_COLUMN])
+    y_test = resolve_labels(test_df[LABEL_COLUMN])
+    if y_train.nunique() < 2 or y_test.nunique() < 2:
+        raise SystemExit(
+            f"{split_mode} split leaves a single class in train or test; "
+            "use a CSV covering benign+attack over time, or --split random"
+        )
 
-    x_train, x_test, y_train, y_test = train_test_split(
-        matrix, labels, test_size=0.25, random_state=args.seed, stratify=labels
-    )
+    # Imputation medians come from the TRAIN split only (no test leakage).
+    x_train, medians = build_feature_matrix(train_df)
+    x_test, _ = build_feature_matrix(test_df, medians)
 
-    classifier = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=None,
-        min_samples_leaf=2,
-        class_weight="balanced",
-        random_state=args.seed,
-        n_jobs=1,
-    )
+    classifier = _rf(args.seed)
     classifier.fit(x_train, y_train)
 
-    predictions = classifier.predict(x_test)
+    proba = classifier.predict_proba(x_test)[:, list(classifier.classes_).index(ATTACK_LABEL)]
+    predictions = (proba >= args.threshold).astype(int)
     accuracy = float(accuracy_score(y_test, predictions))
     report = classification_report(y_test, predictions, output_dict=True, zero_division=0)
+    evaluation = {
+        "split": split_mode,
+        "train_rows": int(len(train_df)),
+        "test_rows": int(len(test_df)),
+        "random_forest": metrics_at(y_test, proba, args.threshold),
+        "baselines": run_baselines(x_train, y_train, x_test, y_test, args.threshold, args.seed),
+        "feature_importance": dict(sorted(
+            ((f, float(v)) for f, v in zip(FEATURES, classifier.feature_importances_)),
+            key=lambda kv: -kv[1])),
+    }
+    if args.holdout_family:
+        evaluation["zero_day"] = zero_day_experiment(
+            train_df, test_df, args.holdout_family, args.threshold, args.seed)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     bundle = {
@@ -193,7 +324,7 @@ def main() -> int:
         "demo": source == "synthetic_demo",
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "rows": int(len(frame)),
-        "metrics": {"accuracy": accuracy, "classification_report": report},
+        "metrics": {"accuracy": accuracy, "classification_report": report, "evaluation": evaluation},
     }
     joblib.dump(bundle, args.out)
 
@@ -206,6 +337,7 @@ def main() -> int:
                 "rows": bundle["rows"],
                 "accuracy": accuracy,
                 "classification_report": report,
+                "evaluation": evaluation,
             },
             indent=2,
             default=float,
@@ -213,7 +345,11 @@ def main() -> int:
     )
 
     print(f"[ai-engine] trained on {source} ({len(frame)} rows)")
+    rf_m = evaluation["random_forest"]
+    print(f"[ai-engine] split={split_mode} train={len(train_df)} test={len(test_df)}")
     print(f"[ai-engine] holdout accuracy: {accuracy:.3f}")
+    print(f"[ai-engine] recall={rf_m['recall']:.3f} fpr={rf_m['fpr']:.4f} "
+          f"f1={rf_m['f1']:.3f} auc={rf_m.get('roc_auc', float('nan')):.3f}")
     if bundle["demo"]:
         print("[ai-engine] WARNING: synthetic DEMO data -- not real experimental results")
     print(f"[ai-engine] model saved to {args.out}")
