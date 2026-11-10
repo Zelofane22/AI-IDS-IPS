@@ -101,13 +101,21 @@ def main() -> int:
                 f"prediction count ({len(predictions)}) != flow rows ({flow_rows})"
             )
         for record in predictions[:1]:
-            for field in ("flow_id", "src_ip", "dst_ip", "protocol", "label", "attack_probability"):
+            for field in ("flow_id", "source_pcap", "src_ip", "dst_ip", "protocol", "label",
+                          "attack_probability"):
                 if field not in record:
                     errors.append(f"prediction record missing {field}")
         notes.append(
             f"predictions={len(predictions)} suspicious={payload.get('suspicious_count')} "
             f"data_source={payload.get('data_source')}"
         )
+        sources = payload.get("sources", {})
+        if predictions and sum(v.get("flows", 0) for v in sources.values()) != len(predictions):
+            errors.append("predictions.json per-source flow counts do not add up")
+        for name, info in sorted(sources.items()):
+            kind = "SYNTHETIC" if info.get("synthetic") else "real"
+            notes.append(f"source {name} ({kind}): flows={info.get('flows')} "
+                         f"suspicious={info.get('suspicious')}")
         if payload.get("demo"):
             notes.append("predictions flagged as synthetic DEMO data")
         if payload.get("demo_traffic"):

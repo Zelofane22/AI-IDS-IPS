@@ -6,15 +6,17 @@ This file records constraints that are easy to get wrong. Read it before changin
 ## Current state
 - 4 Compose services are implemented: `suricata`, `flow-extractor`, `ai-engine`, `dashboard`.
   A stdlib-only synthetic PCAP generator lives in `traffic-generator/`.
-- End-to-end validated with `bash tests/smoke.sh` (Docker 29.9.3 + Compose v5.7.0):
-  97-packet demo PCAP → 11 flows, 8 Suricata alerts, model retrained on a Friday
-  CIC-IDS2017 sample with a temporal split (accuracy 0.998), 0 suspicious / 11 benign
-  on the synthetic PCAP, dashboard healthy on :8501.
-  Re-run it after changing services; do not assume it still passes.
-- The current `data/models/model.joblib` is trained on a 140 649-row CIC-IDS2017
-  Friday sample (`data/cic/train.csv`, built by `tools/build_cic_sample.py`) with a
-  temporal split, not on synthetic demo data. The demo PCAP remains synthetic;
-  `predictions.json` carries `demo_traffic: true` and the dashboard warns about it.
+- End-to-end validated with `bash tests/smoke.sh` (Docker 29.9.3 + Compose v5.7.0) on two
+  PCAPs: synthetic demo (11 flows) + real CIC Friday extract (6 985 flows); 9 Suricata rules,
+  726 alerts; dashboard healthy on :8501. Re-run it after changing services.
+- The model is trained on **NFStream flows of the real CIC-IDS2017 Friday PCAP**, labelled from the
+  CIC CSVs by 5-tuple + time join (`data/cic/train_nfstream.csv`, 122 911 rows), so train and predict
+  use the same extractor. Temporal-split metrics: recall 0.384, FPR 0.0053, AUC 0.990 (DDoS is
+  entirely in the test part = de-facto zero-day DDoS). Deployed model is refit on all rows
+  (`--final-fit all`). Details and demo-extract results: `RAPPORT_REEL.md`.
+- `data/pcaps/cic_friday_extract.pcap` (Bot/PortScan/DDoS windows) is REAL traffic, excluded from
+  training, git-ignored, rebuilt by `tools/build_real_dataset.sh`. `synthetic_demo.pcap` stays
+  synthetic; `predictions.json` has per-capture `sources` and the dashboard warns per capture.
 - Artifact flow: `data/pcaps/*.pcap` → `logs/eve.json` (Suricata) + `data/flows/flows.csv`
   (NFStream) → `data/models/model.joblib` + `data/predictions/predictions.json` → dashboard.
 
@@ -28,6 +30,11 @@ This file records constraints that are easy to get wrong. Read it before changin
 - Containers use `read_only: true` with `/tmp` tmpfs. NFStream writes a temporary CSV in the
   **current directory** — `flow-extractor/Dockerfile` therefore sets `WORKDIR /tmp`; do not
   change it or `to_pandas()` fails with `Read-only file system`.
+- The Suricata base image declares `VOLUME /etc/suricata`: always use
+  `docker compose up -d --renew-anon-volumes`, otherwise compose reuses a stale config/rules volume.
+- NFStream flow ids are NOT stable across runs (multi-threaded meters): never reuse labels keyed by
+  `flow_id` from a previous run; `tools/eval_real_demo.sh` relabels the current `flows.csv`.
+- The CIC Friday PCAP is **pcapng**; CIC CSV timestamps are ADT (UTC-3), 12 h clock without AM/PM.
 - Suricata runs as uid 1000, so the Dockerfile does `chmod -R a+rX /etc/suricata`; without it
   Suricata cannot read classification/reference/threshold config files.
 
@@ -38,7 +45,11 @@ python3 traffic-generator/generate_demo_pcap.py
 
 # full pipeline (one-shot suricata/flow-extractor/ai-engine, then dashboard on :8501)
 docker compose build
-docker compose up -d
+docker compose up -d --renew-anon-volumes
+
+# real CIC data (needs data/cic/raw/pcap/Friday-WorkingHours.pcap + the 3 Friday CSVs)
+bash tools/build_real_dataset.sh      # NFStream flows, CIC labels, real demo extract
+bash tools/eval_real_demo.sh          # AI / Suricata / hybrid scores on the extract
 
 # end-to-end smoke test (requires docker; resets outputs, validates artifacts)
 bash tests/smoke.sh

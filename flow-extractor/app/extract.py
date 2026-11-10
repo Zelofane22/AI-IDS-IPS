@@ -41,6 +41,7 @@ FEATURE_COLUMNS = [
 
 OUTPUT_COLUMNS = IDENTITY_COLUMNS + FEATURE_COLUMNS + [
     "first_seen_ms",
+    "last_seen_ms",
     "application_name",
 ]
 
@@ -119,6 +120,8 @@ def normalize(raw: pd.DataFrame, source_file: str) -> pd.DataFrame:
     df["stddev_pkt_size"] = _series(raw, "bidirectional_stddev_ps").fillna(0.0)
 
     df["first_seen_ms"] = _series(raw, "bidirectional_first_seen_ms").fillna(0)
+    # Not a model feature: used to align flows with external ground truth by time.
+    df["last_seen_ms"] = _series(raw, "bidirectional_last_seen_ms").fillna(0)
     df["application_name"] = _string_series(raw, "application_name", "")
 
     return df[OUTPUT_COLUMNS]

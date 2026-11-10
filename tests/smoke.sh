@@ -23,7 +23,9 @@ echo "==> Building images"
 docker compose build
 
 echo "==> Starting pipeline"
-docker compose up -d --remove-orphans
+# --renew-anon-volumes: the Suricata base image declares VOLUME /etc/suricata;
+# without it compose reuses the old anonymous volume and ignores rule/config changes.
+docker compose up -d --remove-orphans --renew-anon-volumes
 
 cleanup() {
     echo "==> Container status"

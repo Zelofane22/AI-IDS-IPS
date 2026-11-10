@@ -17,3 +17,7 @@ data/models/*/
 .env
 *.patch
 *PROMPT*
+
+# Real CIC-IDS2017 material: never committed (rebuild with tools/build_real_dataset.sh)
+data/pcaps/cic_*.pcap
+data/cic/*.json

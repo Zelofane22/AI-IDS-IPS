@@ -31,6 +31,9 @@ outputs:
       enabled: yes
       filetype: regular
       filename: eve.json
+      # Adds "pcap_filename" to every event: lets the dashboard separate captures
+      # (synthetic demo vs real CIC extract) on a real field, not a guess.
+      pcap-file: true
       types:
         - alert
         - flow

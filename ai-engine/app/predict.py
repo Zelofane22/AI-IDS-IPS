@@ -42,8 +42,11 @@ def _records(df: pd.DataFrame, probabilities: np.ndarray, threshold: float) -> l
     for index, probability in zip(df.index, probabilities):
         row = df.loc[index]
         probability = float(probability)
+        flow_id = str(row.get("flow_id", ""))
         record = {
-            "flow_id": str(row.get("flow_id", "")),
+            "flow_id": flow_id,
+            # flow-extractor builds flow_id as "<pcap stem>:<nfstream id>".
+            "source_pcap": flow_id.rsplit(":", 1)[0] if ":" in flow_id else "",
             "src_ip": str(row.get("src_ip", "")),
             "dst_ip": str(row.get("dst_ip", "")),
             "src_port": _python_scalar(row.get("src_port", 0)),
@@ -115,9 +118,16 @@ def main() -> int:
         records = _records(flows, probabilities, threshold)
 
     suspicious = sum(1 for record in records if record["is_attack"])
-    demo_traffic = any(
-        str(record.get("flow_id", "")).startswith("synthetic_demo") for record in records
-    )
+    sources: dict[str, dict] = {}
+    for record in records:
+        entry = sources.setdefault(
+            record["source_pcap"],
+            {"flows": 0, "suspicious": 0,
+             "synthetic": record["source_pcap"].startswith("synthetic")},
+        )
+        entry["flows"] += 1
+        entry["suspicious"] += int(record["is_attack"])
+    demo_traffic = any(entry["synthetic"] for entry in sources.values())
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model": str(args.model),
@@ -127,6 +137,7 @@ def main() -> int:
         "threshold": threshold,
         "flow_count": len(records),
         "suspicious_count": suspicious,
+        "sources": sources,
         "predictions": records,
     }
     write_json_atomic(args.out, payload)
