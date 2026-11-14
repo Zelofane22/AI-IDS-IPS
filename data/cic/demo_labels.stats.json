@@ -1,0 +1,24 @@
+{
+  "nfstream_flows": 6996,
+  "excluded_demo_windows": 0,
+  "unmatched_dropped": 301,
+  "mixed_benign_attack": 406,
+  "mixed_policy": "attack",
+  "conflict_dropped": 0,
+  "labelled": 6695,
+  "families_before_sampling": {
+    "BENIGN": 3046,
+    "PortScan": 2004,
+    "DDoS": 1581,
+    "Bot": 64
+  },
+  "tolerance_s": 60.0,
+  "sampling_k": 1,
+  "rows_written": 6695,
+  "families_after_sampling": {
+    "BENIGN": 3046,
+    "PortScan": 2004,
+    "DDoS": 1581,
+    "Bot": 64
+  }
+}
